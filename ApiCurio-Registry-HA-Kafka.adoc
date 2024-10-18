@@ -222,3 +222,7 @@ Failover from source to target:
 
       bootstrapServers: 'my-cluster-tgt-kafka-bootstrap.target.svc:9092,my-cluster-kafka-bootstrap.source.svc:9092'
 
+
+apicurioregistry-kafkasql-deployment-56c68cfb75-fzcn2 registry 2024-10-18 09:42:15 INFO <_> [org.apache.kafka.clients.NetworkClient] (kafka-producer-network-thread | apicurio-registry-producer) [Producer clientId=apicurio-registry-producer] Node -1 disconnected.
+apicurioregistry-kafkasql-deployment-56c68cfb75-fzcn2 registry 2024-10-18 09:42:25 INFO <> [org.apache.kafka.clients.NetworkClient] (KSQL Kafka Consumer Thread) [Consumer clientId=consumer-apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5-1, groupId=apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5] Node -1 disconnected.
+apicurioregistry-kafkasql-deployment-56c68cfb75-fzcn2 registry 2024-10-18 09:42:25 INFO <> [org.apache.kafka.clients.NetworkClient] (KSQL Kafka Consumer Thread) [Consumer clientId=consumer-apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5-1, groupId=apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5] Node -1 disconnected.
