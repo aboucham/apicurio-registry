@@ -194,6 +194,27 @@ spec:
 EOF
 ----
 
+Disable the `UnidirectionalTopicOperator` feature in order to observe the creation of the default topic `kafkasql-journal` on the `target` namespace.
+
+`oc edit subscription amq-streams -n openshift-operators`
+
+Add the following env `STRIMZI_FEATURE_GATES` with the value `-UnidirectionalTopicOperator`:
+
+[source, yaml,indent=0]
+----
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: amq-streams
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: amqstreams.v2.7.0-2
+  config:
+    env:
+    - name: STRIMZI_FEATURE_GATES
+      value: "-UnidirectionalTopicOperator"
+---
+
 TIP: Enable `use-connector-resources` to instantiate Kafka connectors through specific custom resources:
 `oc annotate kafkaconnects2is my-connect-cluster strimzi.io/use-connector-resources=true`
 
