@@ -216,13 +216,52 @@ spec:
 
 Once the topic is created on the `target` namespace, check using `oc get kt`.
 
-We can test the failover:
+# 4. Failover Test:
 
-Failover from source to target:
+Failover from `source` to `target`:
 
-      bootstrapServers: 'my-cluster-tgt-kafka-bootstrap.target.svc:9092,my-cluster-kafka-bootstrap.source.svc:9092'
+Edit the bootstrapServers in `ApicurioRegistry CR` in the `source` namespace to the following:
 
+      bootstrapServers: 'my-cluster-kafka-bootstrap.source.svc:9092,my-cluster-tgt-kafka-bootstrap.target.svc:9092'
 
+Let's simulate the unavailability of `my-cluster`:
+
+[source, yaml,indent=0]
+----
+oc annotate Kafka my-cluster strimzi.io/pause-reconciliation="true"
+oc delete sps my-cluster-kafka
+----
+
+Logs shows:
+
+[source, yaml,indent=0]
+----
 apicurioregistry-kafkasql-deployment-56c68cfb75-fzcn2 registry 2024-10-18 09:42:15 INFO <_> [org.apache.kafka.clients.NetworkClient] (kafka-producer-network-thread | apicurio-registry-producer) [Producer clientId=apicurio-registry-producer] Node -1 disconnected.
 apicurioregistry-kafkasql-deployment-56c68cfb75-fzcn2 registry 2024-10-18 09:42:25 INFO <> [org.apache.kafka.clients.NetworkClient] (KSQL Kafka Consumer Thread) [Consumer clientId=consumer-apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5-1, groupId=apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5] Node -1 disconnected.
 apicurioregistry-kafkasql-deployment-56c68cfb75-fzcn2 registry 2024-10-18 09:42:25 INFO <> [org.apache.kafka.clients.NetworkClient] (KSQL Kafka Consumer Thread) [Consumer clientId=consumer-apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5-1, groupId=apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5] Node -1 disconnected.
+----
+
+Check that the apicurio consumer group moves to the target cluster: `my-cluster-tgt`:
+
+[source, yaml,indent=0]
+----
+#!/usr/bin/env bash
+STRIMZI_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
+krun() { kubectl run krun-"$(date +%s)" -it --rm --restart="Never" --image="$STRIMZI_IMAGE" -- "$@"; }
+krun /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server my-cluster-tgt-kafka-bootstrap.target.svc:9092 --list
+----
+
+[source, yaml,indent=0]
+----
+The output should be like:
+If you don't see a command prompt, try pressing enter.
+apicurio-registry-b4379aa3-df78-41f5-8070-face8e4d05f1
+apicurio-registry-0138eff7-5b61-45cd-a299-f31a5d839e1b
+apicurio-registry-18d4b767-13a4-4d06-8f4d-83edbb4bbeb5
+apicurio-registry-60fa6ebb-d902-42bc-adf8-1d4d32c066b5
+apicurio-registry-c18dca3c-897f-4ed5-9ef1-e198c5a9d8fa
+__strimzi-topic-operator-kstreams
+pod "krun-1729245994" deleted
+----
+
+Run the webconsole and get access to the artifacts.
