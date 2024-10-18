@@ -212,7 +212,7 @@ spec:
     env:
     - name: STRIMZI_FEATURE_GATES
       value: "-UnidirectionalTopicOperator"
----
+----
 
 Once the topic is created on the `target` namespace, check using `oc get kt`.
 
