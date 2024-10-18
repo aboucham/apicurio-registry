@@ -1,4 +1,4 @@
-# Title: ApiCurio Registry High Availability baased on AMQ Streams and Mirror Maker 2
+# Title: ApiCurio Registry High Availability based on AMQ Streams and Mirror Maker 2
 Environment Setup:
 
 - Streams for Apache Kafka: 2.7.0
