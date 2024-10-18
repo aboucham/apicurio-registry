@@ -1,0 +1,553 @@
+# Title: ApiCurio Registry High Availability baased on AMQ Streams and Mirror Maker 2
+Environment Setup:
+
+- Streams for Apache Kafka: 2.7.0
+- Red Hat build of Apicurio Registry: 2.6.5
+
+Prerequisites:
+
+- Install Streams for Apache Kafka from OperatorHub
+- Install Red Hat build of Apicurio Registry from OperatorHub
+
+
+# I. Kafka Cluster Creation
+
+Create the 'source' namespace: `oc new-project source`
+
+Create Kafka clusters using Kafka CR YAML configuration
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: my-cluster
+  namespace: source
+spec:
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+  kafka:
+    config:
+      default.replication.factor: 3
+      inter.broker.protocol.version: '3.7'
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      transaction.state.log.replication.factor: 3
+    listeners:
+      - name: plain
+        port: 9092
+        tls: false
+        type: internal
+      - name: tls
+        port: 9093
+        tls: true
+        type: internal
+    replicas: 3
+    storage:
+      type: ephemeral
+    version: 3.7.0
+  zookeeper:
+    replicas: 3
+    storage:
+      type: ephemeral
+EOF
+----
+
+Create the 'target' namespace: `oc new-project target`
+
+Create Kafka clusters using Kafka CR YAML configuration
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: my-cluster-tgt
+  namespace: target
+spec:
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+  kafka:
+    config:
+      default.replication.factor: 3
+      inter.broker.protocol.version: '3.7'
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      transaction.state.log.replication.factor: 3
+    listeners:
+      - name: plain
+        port: 9092
+        tls: false
+        type: internal
+      - name: tls
+        port: 9093
+        tls: true
+        type: internal
+    replicas: 3
+    storage:
+      type: ephemeral
+    version: 3.7.0
+  zookeeper:
+    replicas: 3
+    storage:
+      type: ephemeral
+EOF
+----
+
+### 2. Depploy ApiCurio Registry:
+
+Deploy the ApicurioRegistry CR in the source namespace:
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
+apiVersion: registry.apicur.io/v1
+kind: ApicurioRegistry
+metadata:
+  name: apicurioregistry-kafkasql
+  namespace: source
+spec:
+  configuration:
+    kafkasql:
+      bootstrapServers: 'my-cluster-kafka-bootstrap.source.svc:9092'
+    persistence: kafkasql
+EOF
+----
+
+      bootstrapServers: 'my-cluster-tgt-kafka-bootstrap.target.svc:9092,my-cluster-kafka-bootstrap.source.svc:9092'
+        
+## 3. Setup Mirror Maker 2 between Source and Target:
+
+- Deploy Kafka Mirror Maker 2 CR on the `target` namespace :
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaMirrorMaker2
+metadata:
+  name: my-mm2
+  namespace: target
+spec:
+  clusters:
+    - alias: my-cluster
+      bootstrapServers: 'my-cluster-kafka-bootstrap.source.svc:9092'
+    - alias: my-cluster-tgt
+      bootstrapServers: 'my-cluster-tgt-kafka-bootstrap.target.svc:9092'
+      config:
+        config.storage.replication.factor: -1
+        offset.storage.replication.factor: -1
+        ssl.cipher.suites: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        ssl.enabled.protocols: TLSv1.2
+        ssl.protocol: TLSv1.2
+        status.storage.replication.factor: -1
+  connectCluster: my-cluster-tgt
+  jmxOptions: {}
+  livenessProbe:
+    initialDelaySeconds: 120
+    timeoutSeconds: 60
+  logging:
+    loggers:
+      connect.root.logger.level: INFO
+      log4j.logger.org.apache.kafka.connect.runtime.WorkerSinkTask: INFO
+      log4j.logger.org.apache.kafka.connect.runtime.WorkerSourceTask: INFO
+    type: inline
+  mirrors:
+    - checkpointConnector:
+        config:
+          value.converter: org.apache.kafka.connect.converters.ByteArrayConverter
+          emit.checkpoints.enabled: true
+          sync.group.offsets.interval.seconds: 20
+          key.converter: org.apache.kafka.connect.converters.ByteArrayConverter
+          sync.group.offsets.enabled: true
+          checkpoints.topic.replication.factor: -1
+          emit.checkpoints.interval.seconds: 20
+          refresh.groups.interval.seconds: 20
+          replication.policy.class: org.apache.kafka.connect.mirror.IdentityReplicationPolicy
+        tasksMax: 10
+      groupsPattern: .*
+      sourceCluster: my-cluster
+      sourceConnector:
+        config:
+          offset-syncs.topic.replication.factor: -1
+          value.converter: org.apache.kafka.connect.converters.ByteArrayConverter
+          offset-syncs.topic.location: target
+          refresh.topics.interval.seconds: 20
+          sync.topic.acls.enabled: false
+          key.converter: org.apache.kafka.connect.converters.ByteArrayConverter
+          replication.factor: -1
+          sync.topic.configs.enabled: true
+          replication.policy.class: org.apache.kafka.connect.mirror.IdentityReplicationPolicy
+        tasksMax: 10
+      targetCluster: my-cluster-tgt
+      topicsPattern: .*
+  readinessProbe:
+    initialDelaySeconds: 120
+    timeoutSeconds: 60
+  replicas: 1
+EOF
+----
+
+TIP: Enable `use-connector-resources` to instantiate Kafka connectors through specific custom resources:
+`oc annotate kafkaconnects2is my-connect-cluster strimzi.io/use-connector-resources=true`
+
+NOTE: Multiple instances attempting to use the same internal topics will cause unexpected errors, so you must change the values of these properties for each instance.
+
+
+### Check
+
+[source, yaml,indent=0]
+----
+oc get kc debezium-connect -o yaml | yq '.status.connectorPlugins'
+----
+
+## 3. Deploy pre-populated MySQL instance
+
+#### Configure credentials for the database:
+
+[source, yaml,indent=0]
+----
+oc new-app \
+    -e MYSQL_ROOT_PASSWORD=debezium \
+    -e MYSQL_USER=mysqluser \
+    -e MYSQL_PASSWORD=mysqlpw \
+    -e MYSQL_DATABASE=inventory \
+    mysql:8.0-el9
+----
+
+[source, yaml,indent=0]
+----
+oc rsh `oc get pods -l deployment=mysql -o name` mysql -u mysqluser -pmysqlpw inventory
+----
+[source, yaml,indent=0]
+----
+CREATE TABLE products
+(
+    id INT PRIMARY KEY NOT NULL,
+    name VARCHAR(100),
+    model VARCHAR(100),
+    price INT
+);
+
+
+INSERT INTO products VALUES (1, 'LenovoT41', 'Lenovo T 41', 3);
+INSERT INTO products VALUES (2, 'LenovoT41', 'Lenovo UT 41', 45);
+INSERT INTO products VALUES (3, 'DELL', 'DELL 41', 45);
+----
+
+# II - Kafka Connector CR: Create KC with MYSQL Connector:
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  labels:
+    strimzi.io/cluster: debezium-connect
+  name: mysql-connector
+spec:
+  class: io.debezium.connector.mysql.MySqlConnector
+  tasksMax: 1
+  autoRestart:
+    enabled: true
+  config:
+    database.hostname: mysql
+    database.port: 3306
+    database.user: root
+    database.password: debezium
+    database.server.id: 184057
+    database.whitelist: inventory
+    database.names: inventory
+    include.schema.changes: false
+    schema.history.internal.kafka.topic: schemahistory.fullfillment
+    schema.history.internal.kafka.bootstrap.servers: 'my-cluster-kafka-bootstrap:9092'
+    topic.prefix: mysql
+    topic.creation.default.replication.factor: 1
+    topic.creation.default.partitions: 1
+EOF
+----
+
+#### Check Status:
+
+[source, yaml,indent=0]
+----
+oc get kctr
+NAME              CLUSTER             CONNECTOR CLASS                              MAX TASKS   READY
+mysql-connector   dbz-mysql-connect   io.debezium.connector.mysql.MySqlConnector   1           True
+----
+
+[source, yaml,indent=0]
+----
+oc get kctr mysql-connector -o yaml | yq '.status'
+----
+
+[source, yaml,indent=0]
+----
+status:
+  conditions:
+  - lastTransitionTime: "2023-10-24T12:12:59.267139132Z"
+    status: "True"
+    type: Ready
+  connectorStatus:
+    connector:
+      state: RUNNING
+      worker_id: 10.131.0.22:8083
+    name: mysql-connector
+    tasks:
+    - id: 0
+      state: RUNNING
+      worker_id: 10.131.0.22:8083
+    type: source
+  observedGeneration: 1
+  tasksMax: 1
+  topics:
+  - mysql.inventory.products
+----
+
+
+#### Debugging using Rest API:
+
+Check the complete stacktrace in case of error in the status:
+
+
+[source, yaml,indent=0]
+----
+oc exec -i debezium-connect-connect-0 -- curl debezium-connect-connect-0.debezium-connect-connect.dbz-mysql.svc:8083/connectors
+----
+[source, yaml,indent=0]
+----
+["mysql-connector"] 
+----
+
+[source, yaml,indent=0]
+----
+oc exec -i debezium-connect-connect-0 -- curl debezium-connect-connect-0.debezium-connect-connect.dbz-mysql.svc:8083/connectors/mysql-connector/status
+----
+[source, yaml,indent=0]
+----
+{"name":"mysql-connector","connector":{"state":"RUNNING","worker_id":"debezium-connect-connect-0.debezium-connect-connect.dbz-mysql.svc:8083"},"tasks":[{"id":0,"state":"RUNNING","worker_id":"debezium-connect-connect-0.debezium-connect-connect.dbz-mysql.svc:8083"}],"type":"source"}
+----
+
+Validate a configuration in case of error:
+
+[source, yaml,indent=0]
+----
+oc exec -i debezium-connect-connect-0 -- curl -X PUT \
+    -H "Accept:application/json" \
+    -H "Content-Type:application/json" \
+    http://debezium-connect-connect:8083/connector-plugins/MongoDbConnector/config/validate/ -d @- <<'EOF'
+{
+        "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
+        "name": "mongodbconnector",
+        "tasks.max": "1",
+        "mongodb.hosts": "rs0/mongodb:27017",
+        "mongodb.name": "dbserver1",
+        "mongodb.user" : "debezium",
+        "mongodb.password" : "dbz",
+        "database.whitelist" : "inventory",
+        "database.history.kafka.bootstrap.servers" : "my-cluster-kafka-bootstrap:9092"
+}
+EOF
+----
+
+# III - Add signal configuration and trigger ad hoc snapshot:
+
+[source, yaml,indent=0]
+----
+oc rsh `oc get pods -l deployment=mysql -o name` mysql -u mysqluser -pmysqlpw inventory
+----
+
+The following example shows a CREATE TABLE command that creates a three-column `debezium_signal` table:
+
+[source, yaml,indent=0]
+----
+CREATE TABLE debezium_signal (id VARCHAR(42) PRIMARY KEY, type VARCHAR(32) NOT NULL, data VARCHAR(2048) NULL);
+----
+
+Let's create a new table to test the signal mechanism
+
+[source, yaml,indent=0]
+----
+oc rsh `oc get pods -l deployment=mysql -o name` mysql -u mysqluser -pmysqlpw inventory
+
+CREATE TABLE customers (
+  id SERIAL,
+  first_name VARCHAR(255) NOT NULL,
+  last_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  PRIMARY KEY(id)
+);
+
+
+INSERT INTO customers VALUES (1, 'Test1', 'TEST1', 'test@test.com');
+INSERT INTO customers VALUES (2, 'Test2', 'TEST2', 'test@test.com');
+INSERT INTO customers VALUES (3, 'Test2', 'TEST3', 'test@test.com');
+----
+
+- Add Signal Config to kafka Connector CR:
+
+[source, yaml,indent=0]
+----
+oc apply -f https://raw.githubusercontent.com/aboucham/debezium/main/examples/kc-mysql-connector-signal.yaml
+----
+
+[source, yaml,indent=0]
+----
+    signal.kafka.topic: mysql.debezium_signal
+    signal.kafka.bootstrap.servers: 'my-cluster-kafka-bootstrap:9092'
+    signal.enabled.channels: 'source,kafka,jmx'
+    signal.data.collection: inventory.debezium_signal
+----
+
+
+LOGS:
+
+[source, yaml,indent=0]
+----
+dbz-mysql-connect-connect-746b688cbb-p2xvf dbz-mysql-connect-connect 2023-10-25 08:23:03,638 WARN [mysql-connector|task-0] [Consumer clientId=e79dab95-01b5-41d2-ad70-4662e56fa6a6, groupId=kafka-signal] Error while fetching metadata with correlation id 1 : {mysql.debezium_signal=LEADER_NOT_AVAILABLE} (org.apache.kafka.clients.NetworkClient) [debezium-mysqlconnector-mysql-SignalProcessor]
+dbz-mysql-connect-connect-746b688cbb-p2xvf dbz-mysql-connect-connect 2023-10-25 08:23:03,638 INFO [mysql-connector|task-0] [Consumer clientId=e79dab95-01b5-41d2-ad70-4662e56fa6a6, groupId=kafka-signal] Cluster ID: DO1r2ddtQNKzZwOKSJnGhg (org.apache.kafka.clients.Metadata) [debezium-mysqlconnector-mysql-SignalProcessor]
+dbz-mysql-connect-connect-746b688cbb-p2xvf dbz-mysql-connect-connect 2023-10-25 08:23:03,640 INFO [mysql-connector|task-0] [Consumer clientId=e79dab95-01b5-41d2-ad70-4662e56fa6a6, groupId=kafka-signal] Discovered group coordinator my-cluster-kafka-0.my-cluster-kafka-brokers.dbz-mysql.svc:9092 (id: 2147483647 rack: null) (org.apache.kafka.clients.consumer.internals.ConsumerCoordinator) [debezium-mysqlconnector-mysql-SignalProcessor]
+dbz-mysql-connect-connect-746b688cbb-p2xvf dbz-mysql-connect-connect 2023-10-25 08:23:03,645 INFO [mysql-connector|task-0] [Consumer clientId=e79dab95-01b5-41d2-ad70-4662e56fa6a6, groupId=kafka-signal] Found no committed offset for partition mysql.debezium_signal-0 (org.apache.kafka.clients.consumer.internals.ConsumerCoordinator) [debezium-mysqlconnector-mysql-SignalProcessor]
+----
+
+### Trigger Snapshot:
+
+[source, yaml,indent=0]
+----
+#!/usr/bin/env bash
+STRIMZI_IMAGE="registry.redhat.io/amq7/amq-streams-kafka-32-rhel8:2.2.0"
+krun() { kubectl run krun-"$(date +%s)" -it --rm --restart="Never" --image="$STRIMZI_IMAGE" -- "$@"; }
+
+krun bin/kafka-console-producer.sh --bootstrap-server my-cluster-kafka-bootstrap:9092 --topic mysql.debezium_signal --property parse.key=true --property key.separator=:
+----
+
+Once the following message is displayed `If you don't see a command prompt, try pressing enter`, you could sent the following message by copy and paste:
+
+[source, yaml,indent=0]
+----
+mysql:{"type":"execute-snapshot","data": {"data-collections": ["inventory.customers"], "type": "INCREMENTAL"}}
+----
+
+## Managing schema with ApiCurio Registry:
+
+### Source DBZ / Sink Kamelet - AVRO Converter:
+
+Add the following lines to the kafkaConnector CR for Avro converter:
+
+[source, yaml,indent=0]
+----
+oc apply -f https://raw.githubusercontent.com/aboucham/debezium/main/examples/kc-mysql-connector-signal-sr-avro.yaml
+----
+[source, yaml,indent=0]
+----
+    key.converter: io.apicurio.registry.utils.converter.AvroConverter
+    key.converter.apicurio.registry.url: http://apicurioregistry-psql-service:8080/apis/registry/v2
+    key.converter.apicurio.registry.auto-register: true
+    key.converter.apicurio.registry.find-latest: true
+    value.converter: io.apicurio.registry.utils.converter.AvroConverter
+    value.converter.apicurio.registry.url: http://apicurioregistry-psql-service:8080/apis/registry/v2
+    value.converter.apicurio.registry.auto-register: true
+    value.converter.apicurio.registry.find-latest: true
+----
+
+
+- Deploy Kamelet/KameletBinding with ApiCurio Registry AVRO handling:
+
+[source, yaml,indent=0]
+----
+oc apply -f https://raw.githubusercontent.com/aboucham/debezium/main/examples/kafka-apicurio-registry-avro-source.kamelet.yaml
+----
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
+apiVersion: camel.apache.org/v1alpha1
+kind: KameletBinding
+metadata:
+  name: kafka-ar-avro-source
+spec:
+  sink:
+    ref:
+      apiVersion: camel.apache.org/v1alpha1
+      kind: Kamelet
+      name: log-sink
+  source:
+    properties:
+      apicurioRegistryUrl: 'http://apicurioregistry-psql-service:8080/apis/registry/v2'
+      bootstrapServers: 'my-cluster-kafka-bootstrap:9092'
+      topic: mysql.inventory.customers
+    ref:
+      apiVersion: camel.apache.org/v1alpha1
+      kind: Kamelet
+      name: kafka-apicurio-registry-avro-source
+EOF
+----
+
+
+### Logs:
+
+[source, yaml,indent=0]
+----
+kafka-ar-avro-source-58b5d84f44-2vkkr integration 2023-12-07 09:35:07,525 INFO  [info] (Camel (camel-1) thread #1 - KafkaConsumer[mysql.inventory.customers]) Exchange[ExchangePattern: InOnly, BodyType: org.apache.avro.generic.GenericData.Record, Body: {"before": null, "after": {"id": 11, "first_name": "Test11", "last_name": "TEST11", "email": "test@test.com"}, "source": {"version": "2.4.0.Final", "connector": "mysql", "name": "mysql", "ts_ms": 1701941706000, "snapshot": "false", "db": "inventory", "sequence": null, "table": "customers", "server_id": 1, "gtid": null, "file": "binlog.000002", "pos": 7087, "row": 0, "thread": 51, "query": null}, "op": "c", "ts_ms": 1701941706962, "transaction": null}]
+----
+
+### Source DBZ / Sink Kamelet - JSON Converter:
+
+- Add the following lines to the kafkaConnector CR for json converter:
+
+[source, yaml,indent=0]
+----
+oc apply -f https://raw.githubusercontent.com/aboucham/debezium/main/examples/kc-mysql-connector-signal-sr-json.yaml
+----
+[source, yaml,indent=0]
+----
+    key.converter: io.apicurio.registry.utils.converter.ExtJsonConverter
+    key.converter.apicurio.registry.url: http://apicurioregistry-psql-service:8080/apis/registry/v2
+    key.converter.apicurio.registry.auto-register: true
+    key.converter.apicurio.registry.find-latest: true
+    value.converter: io.apicurio.registry.utils.converter.ExtJsonConverter
+    value.converter.apicurio.registry.url: http://apicurioregistry-psql-service:8080/apis/registry/v2
+    value.converter.apicurio.registry.auto-register: true
+    value.converter.apicurio.registry.find-latest: true
+----
+
+- Deploy Kamelet/KameletBinding with ApiCurio Registry Jsonschema handling:
+
+[source, yaml,indent=0]
+----
+oc apply -f https://raw.githubusercontent.com/aboucham/debezium/main/examples/kafka-apicurio-registry-json-source.kamelet.yaml
+----
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
+apiVersion: camel.apache.org/v1alpha1
+kind: KameletBinding
+metadata:
+  name: kafkatopic-apicurio-registry-log
+spec:
+  source:
+    ref:
+      kind: Kamelet
+      apiVersion: camel.apache.org/v1alpha1
+      name: kafka-apicurio-registry-source
+    properties:
+      bootstrapServers: "my-cluster-kafka-bootstrap:9092"
+      topic: "mysql.inventory.customers"
+      apicurioRegistryUrl: "http://apicurioregistry-psql-service:8080/apis/registry/v2"
+  sink:
+    ref:
+      apiVersion: camel.apache.org/v1alpha1
+      kind: Kamelet
+      name: log-sink
+EOF
+----
+
+
