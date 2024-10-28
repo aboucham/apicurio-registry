@@ -134,6 +134,27 @@ spec:
 EOF
 ----
 
+Disable the `UnidirectionalTopicOperator` feature in order to observe the creation of the default topic `kafkasql-journal` on the `target` namespace.
+
+`oc edit subscription amq-streams -n openshift-operators`
+
+Add the following env `STRIMZI_FEATURE_GATES` with the value `-UnidirectionalTopicOperator`:
+
+[source, yaml,indent=0]
+----
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: amq-streams
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: amqstreams.v2.7.0-2
+  config:
+    env:
+    - name: STRIMZI_FEATURE_GATES
+      value: "-UnidirectionalTopicOperator"
+----
+
         
 ## 3. Setup Mirror Maker 2 between Source and Target:
 
@@ -205,27 +226,6 @@ spec:
     timeoutSeconds: 60
   replicas: 1
 EOF
-----
-
-Disable the `UnidirectionalTopicOperator` feature in order to observe the creation of the default topic `kafkasql-journal` on the `target` namespace.
-
-`oc edit subscription amq-streams -n openshift-operators`
-
-Add the following env `STRIMZI_FEATURE_GATES` with the value `-UnidirectionalTopicOperator`:
-
-[source, yaml,indent=0]
-----
-spec:
-  channel: stable
-  installPlanApproval: Automatic
-  name: amq-streams
-  source: redhat-operators
-  sourceNamespace: openshift-marketplace
-  startingCSV: amqstreams.v2.7.0-2
-  config:
-    env:
-    - name: STRIMZI_FEATURE_GATES
-      value: "-UnidirectionalTopicOperator"
 ----
 
 Once the topic is created on the `target` namespace, check using `oc get kt`.
