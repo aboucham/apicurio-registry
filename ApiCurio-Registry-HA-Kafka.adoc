@@ -292,3 +292,6 @@ oc delete sps my-cluster-tgt -n target
 ----
 
 NOTE: The ApiCurio detects the disconnection but never tries to connect to the Active Cluster `my-cluster` until the restart of the pod.
+This is in line with the Kafka Reconnection Logic:
+If the client is already connected to a broker and that connection drops, it will attempt to reconnect to that broker first. If that fails, it will then move on to the next broker in the list.
+The client does not automatically revert to the first broker in the list after a disconnection; it follows the last successful connection first.
