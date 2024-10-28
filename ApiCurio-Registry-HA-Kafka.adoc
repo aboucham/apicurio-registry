@@ -232,7 +232,7 @@ Once the topic is created on the `target` namespace, check using `oc get kt`.
 
 # 4. Failover Test:
 
-## 4.1 Failover from `source` to `target`:
+### 4.1 Failover from `source` to `target`:
 
 Edit the bootstrapServers in `ApicurioRegistry CR` in the `source` namespace to the following:
 
@@ -280,7 +280,7 @@ pod "krun-1729245994" deleted
 
 Run the webconsole and get access to the artifacts.
 
-## 4.1 Failover from target to source:
+### 4.2 Failover from target to source:
 
 Let's simulate the unavailability of `my-cluster-tgt` and make `my-cluster` UP:
 
