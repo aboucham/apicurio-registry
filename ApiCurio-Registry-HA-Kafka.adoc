@@ -10,7 +10,7 @@ Prerequisites:
 - Install Red Hat build of Apicurio Registry from OperatorHub
 
 
-# I. Kafka Cluster Creation
+# 1. Kafka Cluster Creation
 
 Create the `source` namespace: `oc new-project source`
 
@@ -232,7 +232,7 @@ Once the topic is created on the `target` namespace, check using `oc get kt`.
 
 # 4. Failover Test:
 
-Failover from `source` to `target`:
+## 4.1 Failover from `source` to `target`:
 
 Edit the bootstrapServers in `ApicurioRegistry CR` in the `source` namespace to the following:
 
@@ -279,3 +279,16 @@ pod "krun-1729245994" deleted
 ----
 
 Run the webconsole and get access to the artifacts.
+
+## 4.1 Failover from target to source:
+
+Let's simulate the unavailability of `my-cluster-tgt` and make `my-cluster` UP:
+
+[source, yaml,indent=0]
+----
+oc annotate Kafka my-cluster strimzi.io/pause-reconciliation-
+oc annotate Kafka my-cluster-tgt strimzi.io/pause-reconciliation="true"
+oc delete sps my-cluster-tgt -n target
+----
+
+NOTE: The ApiCurio detects the disconnection but never tries to connect to the Active Cluster `my-cluster` until the restart of the pod.
