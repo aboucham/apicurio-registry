@@ -50,6 +50,26 @@ spec:
   postgresVersion: 16
 ----
 
+Extract DB required information from the secret created `mypostgrescluster-pguser-mypostgrescluster` :
+
+[source, yaml,indent=0]
+----
+echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.host') |base64 -d
+mypostgrescluster-primary.source.svc
+
+echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.port') |base64 -d
+5432
+
+echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.dbname') |base64 -d
+mypostgrescluster
+
+echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.user') |base64 -d
+mypostgrescluster
+
+echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.password') |base64 -d
+k0Ko7FOrJ}l_*d/l1m6Kb[w2
+----
+
 ### 2. Depploy ApiCurio Registry:
 
 Deploy the `ApicurioRegistry CR` in the `source` namespace:
@@ -60,14 +80,14 @@ oc create -f - <<EOF
 apiVersion: registry.apicur.io/v1
 kind: ApicurioRegistry
 metadata:
-  name: apicurioregistry-kafkasql
+  name: apicurioregistry-psql
   namespace: source
 spec:
   configuration:
     sql:
       dataSource:
-        url: "jdbc:postgresql://postgresql:5432/apicurio"
-        userName: "psql"
-        password: "password"
+        url: "jdbc:postgresql://mypostgrescluster-primary.source.svc:5432/mypostgrescluster"
+        userName: "mypostgrescluster"
+        password: "k0Ko7FOrJ}l_*d/l1m6Kb[w2"
 EOF
 ----
