@@ -84,6 +84,7 @@ metadata:
   namespace: source
 spec:
   configuration:
+    persistence: "sql"
     sql:
       dataSource:
         url: "jdbc:postgresql://mypostgrescluster-primary.source.svc:5432/mypostgrescluster"
