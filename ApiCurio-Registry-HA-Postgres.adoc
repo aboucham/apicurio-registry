@@ -1,0 +1,73 @@
+# Title: ApiCurio Registry High Availability based on Postgres Cluster
+
+Environment Setup:
+
+- Crunchy Postgres for Kubernetes: 5.7.0
+- Red Hat build of Apicurio Registry: 2.6.5
+
+Prerequisites:
+
+- Install Crunchy Postgres for Kubernetes from OperatorHub
+- Install Red Hat build of Apicurio Registry from OperatorHub
+
+# 1. Postgres Cluster Creation:
+
+Create the `source` namespace: `oc new-project source`
+
+Create Kafka clusters using Kafka CR YAML configuration
+
+[source, yaml,indent=0]
+----
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  finalizers:
+    - postgres-operator.crunchydata.com/finalizer
+  name: mypostgrescluster
+  namespace: source
+spec:
+  backups:
+    pgbackrest:
+      repos:
+        - name: repo1
+          volume:
+            volumeClaimSpec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 1Gi
+  instances:
+    - dataVolumeClaimSpec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      name: ''
+      replicas: 1
+  port: 5432
+  postgresVersion: 16
+----
+
+### 2. Depploy ApiCurio Registry:
+
+Deploy the `ApicurioRegistry CR` in the `source` namespace:
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
+apiVersion: registry.apicur.io/v1
+kind: ApicurioRegistry
+metadata:
+  name: apicurioregistry-kafkasql
+  namespace: source
+spec:
+  configuration:
+    sql:
+      dataSource:
+        url: "jdbc:postgresql://postgresql:5432/apicurio"
+        userName: "psql"
+        password: "password"
+EOF
+----
