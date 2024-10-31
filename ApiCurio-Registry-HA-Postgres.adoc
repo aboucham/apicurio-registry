@@ -18,13 +18,25 @@ Create Kafka clusters using Kafka CR YAML configuration
 
 [source, yaml,indent=0]
 ----
+oc create -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: init-sql
+data:
+  init.sql: |
+    \c apicuriodb
+    GRANT CREATE ON SCHEMA public TO "apicuriodb";
+EOF
+----
+
+[source, yaml,indent=0]
+----
+oc create -f - <<EOF
 apiVersion: postgres-operator.crunchydata.com/v1beta1
 kind: PostgresCluster
 metadata:
-  finalizers:
-    - postgres-operator.crunchydata.com/finalizer
-  name: mypostgrescluster
-  namespace: source
+  name: apicuriodb
 spec:
   backups:
     pgbackrest:
@@ -37,6 +49,9 @@ spec:
               resources:
                 requests:
                   storage: 1Gi
+  databaseInitSQL:
+    key: init.sql
+    name: init-sql
   instances:
     - dataVolumeClaimSpec:
         accessModes:
@@ -44,10 +59,11 @@ spec:
         resources:
           requests:
             storage: 1Gi
-      name: ''
-      replicas: 1
+      name: instance1
+      replicas: 2
   port: 5432
   postgresVersion: 16
+EOF
 ----
 
 Extract DB required information from the secret created `mypostgrescluster-pguser-mypostgrescluster` :
