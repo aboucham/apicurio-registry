@@ -70,20 +70,20 @@ Extract DB required information from the secret created `mypostgrescluster-pguse
 
 [source, yaml,indent=0]
 ----
-echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.host') |base64 -d
-mypostgrescluster-primary.source.svc
+echo $(oc get secret apicuriodb-pguser-apicuriodb -o yaml | yq '.data.host') |base64 -d
+apicuriodb-primary.source.svc
 
-echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.port') |base64 -d
+echo $(oc get secret apicuriodb-pguser-apicuriodb -o yaml | yq '.data.port') |base64 -d
 5432
 
-echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.dbname') |base64 -d
-mypostgrescluster
+echo $(oc get secret apicuriodb-pguser-apicuriodb -o yaml | yq '.data.dbname') |base64 -d
+apicuriodb
 
-echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.user') |base64 -d
-mypostgrescluster
+echo $(oc get secret apicuriodb-pguser-apicuriodb -o yaml | yq '.data.user') |base64 -d
+apicuriodb
 
-echo $(oc get secret mypostgrescluster-pguser-mypostgrescluster -o yaml | yq '.data.password') |base64 -d
-k0Ko7FOrJ}l_*d/l1m6Kb[w2
+echo $(oc get secret apicuriodb-pguser-apicuriodb -o yaml | yq '.data.password') |base64 -d
+ut7>xSCgjwK=ZvE)-[i?88a:
 ----
 
 ### 2. Depploy ApiCurio Registry:
@@ -103,8 +103,8 @@ spec:
     persistence: "sql"
     sql:
       dataSource:
-        url: "jdbc:postgresql://mypostgrescluster-primary.source.svc:5432/mypostgrescluster"
-        userName: "mypostgrescluster"
-        password: "k0Ko7FOrJ}l_*d/l1m6Kb[w2"
+        url: "jdbc:postgresql://apicuriodb-primary.source.svc:5432/apicuriodb"
+        userName: "apicuriodb"
+        password: "ut7>xSCgjwK=ZvE)-[i?88a:"
 EOF
 ----
