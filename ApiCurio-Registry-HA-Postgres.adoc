@@ -108,3 +108,31 @@ spec:
         password: "ut7>xSCgjwK=ZvE)-[i?88a:"
 EOF
 ----
+
+# 3. Test the High Availability
+
+[source, bash,indent=0]
+----
+PRIMARY_POD=$(kubectl get pods --selector=postgres-operator.crunchydata.com/role=master -o jsonpath='{.items[*].metadata.labels.postgres-operator\.crunchydata\.com/instance}')
+echo $PRIMARY_POD
+
+apicuriodb-instance1-5zx5
+----
+
+[source, yaml,indent=0]
+----
+oc exec -it apicuriodb-instance1-5zx5-0 -n source -- psql -U postgres
+Defaulted container "database" out of: database, replication-cert-copy, pgbackrest, pgbackrest-config, postgres-startup (init), nss-wrapper-init (init)
+psql (16.4)
+Type "help" for help.
+postgres=# SELECT pg_is_in_recovery();
+ pg_is_in_recovery
+-------------------
+ f
+(1 row)
+----
+
+If it returns `true`, you're connected to a standby (read-only) instance.
+If it returns `false`, you're on the primary instance.
+
+
