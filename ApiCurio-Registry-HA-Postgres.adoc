@@ -109,19 +109,71 @@ spec:
 EOF
 ----
 
-# 3. Test the High Availability
+# 3. Test of the Postgres High Availability
+
+Currently, we have two instances, one `primary` and one `standby`:
 
 [source, bash,indent=0]
 ----
-PRIMARY_POD=$(kubectl get pods --selector=postgres-operator.crunchydata.com/role=master -o jsonpath='{.items[*].metadata.labels.postgres-operator\.crunchydata\.com/instance}')
-echo $PRIMARY_POD
+oc get pods
+NAME                                                    READY   STATUS      RESTARTS   AGE
+apicuriodb-backup-rkwx-fbbf7                            0/1     Completed   0          15m
+apicuriodb-instance1-5zx5-0                             4/4     Running     0          2m4s
+apicuriodb-instance1-7s4n-0                             4/4     Running     0          15m
+apicuriodb-repo-host-0                                  2/2     Running     0          15m
+----
 
+First, let's determine which Pod is the primary. If you are using Bash, you can run the following command:
+
+[source, bash,indent=0]
+----
+kubectl get pods --selector=postgres-operator.crunchydata.com/role=master -o jsonpath='{.items[*].metadata.labels.postgres-operator\.crunchydata\.com/instance}'
 apicuriodb-instance1-5zx5
 ----
 
+We can use the value above to delete the StatefulSet associated with the current Postgres primary instance.
+
+[source, bash,indent=0]
+----
+kubectl delete sts apicuriodb-instance1-5zx5
+----
+
+Let's see what happens. Try getting all of the StatefulSets for the Postgres instances in the `apicuriodb` cluster:
+
+[source, bash,indent=0]
+----
+apicuriodb-instance1-5zx5-0                             0/4     Running     0          2m4s
+apicuriodb-instance1-7s4n-0                             4/4     Running     0          15m
+----
+
+The apicurio pod shows the following:
+
+[source, bash,indent=0]
+----
+apicurioregistry-psql-deployment-565f9588bc-2sn6m registry 2024-10-31 09:07:20 WARN <_> [io.quarkus.agroal.runtime.AgroalEventLoggingListener] (executor-thread-14) Datasource '<default>': This connection has been closed.
+apicurioregistry-psql-deployment-565f9588bc-2sn6m registry 2024-10-31 09:07:20 WARN <_> [io.apicurio.registry.metrics.health.liveness.PersistenceExceptionLivenessCheck] (executor-thread-14) Liveness problem suspected in PersistenceExceptionLivenessCheck because of an exception: : io.apicurio.registry.storage.RegistryStorageException: io.apicurio.registry.storage.impl.sql.jdb.RuntimeSqlException: org.postgresql.util.PSQLException: FATAL: terminating connection due to administrator command
+
+2024-10-31 09:07:27 INFO <> [io.apicurio.registry.metrics.health.liveness.PersistenceExceptionLivenessCheck] (executor-thread-26) After this event, the error counter is 2 (out of the maximum 5 allowed).
+2024-10-31 09:07:37 INFO <_> [io.apicurio.registry.metrics.health.liveness.PersistenceExceptionLivenessCheck] (executor-thread-25) After this event, the error counter is 5 (out of the maximum 5 allowed).
+apicurioregistry-psql-deployment-565f9588bc-2sn6m registry 2024-10-31 09:07:48 WARN <> [io.quarkus.agroal.runtime.AgroalEventLoggingListener] (agroal-11) Datasource '<default>': Closing connection in incorrect state VALIDATION
+apicurioregistry-psql-deployment-565f9588bc-2sn6m registry 2024-10-31 09:07:48 INFO <> [io.quarkus.bootstrap.runner.Timing] (Shutdown thread) apicurio-registry-storage-sql stopped in 0.030s
+----
+
+NOTE: The apicurio registry pod exhausted all the retries of the liveness Persistence Check and restart the process that connect again to the primary instance.
+
+
+The new primary instance is:
+
 [source, yaml,indent=0]
 ----
-oc exec -it apicuriodb-instance1-5zx5-0 -n source -- psql -U postgres
+kubectl get pods --selector=postgres-operator.crunchydata.com/role=master -o jsonpath='{.items[*].metadata.labels.postgres-operator\.crunchydata\.com/instance}'
+apicuriodb-instance1-7s4n
+----
+
+
+[source, yaml,indent=0]
+----
+oc exec -it apicuriodb-instance1-7s4n-0 -n source -- psql -U postgres
 Defaulted container "database" out of: database, replication-cert-copy, pgbackrest, pgbackrest-config, postgres-startup (init), nss-wrapper-init (init)
 psql (16.4)
 Type "help" for help.
@@ -134,5 +186,3 @@ postgres=# SELECT pg_is_in_recovery();
 
 If it returns `true`, you're connected to a standby (read-only) instance.
 If it returns `false`, you're on the primary instance.
-
-
