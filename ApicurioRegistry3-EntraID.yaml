@@ -1,0 +1,84 @@
+apiVersion: registry.apicur.io/v1
+kind: ApicurioRegistry3
+metadata:
+  name: $APPLICATION_NAME
+  finalizers:
+    - apicurioregistries3.registry.apicur.io/finalizer
+spec:
+  app:
+    auth:
+      authz:
+        adminOverride:
+          enabled: true
+        enabled: true
+        ownerOnlyEnabled: true
+      enabled: true
+      tls:
+        tlsVerificationType: none
+    env:
+      - name: QUARKUS_OIDC_TENANT-ENABLED
+        value: 'true'
+      - name: REGISTRY_OIDC_UI_CLIENT_ID
+        value: $APP_CLIENT_ID
+      - name: APICURIO_UI_AUTH_OIDC_CLIENT-ID
+        value: $APP_CLIENT_ID
+      - name: QUARKUS_OIDC_AUTH-SERVER-URL
+        value: https://login.microsoftonline.com/$DOMAIN_ID/v2.0
+      - name: APICURIO_UI_AUTH_OIDC_REDIRECT-URI
+        value: https://$UI_INGRESS_URL
+      - name: APICURIO_AUTH_ROLE-BASED-AUTHORIZATION
+        value: 'true'
+      - name: QUARKUS_OIDC_ROLES_ROLE_CLAIM_PATH
+        value: roles
+    features:
+      resourceDeleteEnabled: true
+    ingress:
+      enabled: false
+  ui:
+    env:
+      - name: REGISTRY_API_URL
+        value: https://$APP_INGRESS_URL/apis/registry/v3
+      - name: REGISTRY_AUTH_TYPE
+        value: oidc
+      - name: REGISTRY_AUTH_TOKEN_TYPE
+        value: id
+    ingress:
+      enabled: false
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: apicurio-registry-app
+  annotations:
+    kubernetes.io/tls-acme: "true"
+  labels:
+    app: $APPLICATION_NAME
+spec:
+  host: $APP_INGRESS_URL
+  to:
+    kind: Service
+    name: registry-app-service
+    weight: 100
+  wildcardPolicy: None
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: apicurio-registry-ui
+  annotations:
+    kubernetes.io/tls-acme: "true"
+  labels:
+    app: $APPLICATION_NAME
+spec:
+  host: $UI_INGRESS_URL
+  to:
+    kind: Service
+    name: registry-ui-service
+    weight: 100
+  wildcardPolicy: None
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
