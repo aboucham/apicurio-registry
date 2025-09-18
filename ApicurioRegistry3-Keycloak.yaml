@@ -10,7 +10,7 @@ spec:
       enabled: true
       appClientId: registry-client-api
       uiClientId: registry-client-ui
-      authServerUrl: https://$KEYCLOAK_INGRESS_URL/auth/realms/registry
+      authServerUrl: https://$KEYCLOAK_INGRESS_URL
       redirectUri: http://$UI_INGRESS_URL
       logoutUrl: http://$UI_INGRESS_URL
       basicAuth:
