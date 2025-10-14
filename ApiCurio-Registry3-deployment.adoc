@@ -106,6 +106,8 @@ spec:
 EOF
 ----
 
+=== Deploy ApiCurio Registry 3 Secured by KeyCloak
+
 [source, bash]
 ----
 oc new-project registry
