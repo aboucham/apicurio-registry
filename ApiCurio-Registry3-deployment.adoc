@@ -88,7 +88,8 @@ First, install the necessary Red Hat Operators for ApiCurio Registry 3 (`Red Hat
 
 [source, bash]
 ----
-oc apply -f - <<EOFapiVersion: operators.coreos.com/v1alpha1
+oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: apicurio-registry-3
