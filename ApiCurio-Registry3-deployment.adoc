@@ -6,8 +6,7 @@
 
 == Environment Setup
 
- - Streams for Apache Kafka: 3.0.1-2 (Red Hat)
- - Streams for Apache Kafka Console: 3.0.1-3 (Red Hat)
+ - Red Hat build of Apicurio Registry 3 - 3.0.15-r1 provided by Red Hat
 
 == Deploy and Configure KeyCloak 26 for ApiCurio Registry3
 
@@ -52,7 +51,7 @@ The `KEYCLOAK_HOST_URL` must be defined in the `CN=` in the following:
 
 [source, bash]
 ----
-openssl req -subj '/CN=keycloak-host.apps.abouchama-ai.emea.aws.cee.support/O=Keycloak-host/C=US' -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out certificate.pem
+openssl req -subj '/CN=keycloak-host.apps.aboucham.emea.aws.cee.support/O=Keycloak-host/C=US' -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out certificate.pem
 oc create secret tls example-tls-secret --cert certificate.pem --key key.pem
 ----
 
@@ -82,6 +81,29 @@ oc apply -f https://raw.githubusercontent.com/aboucham/apicurio-registry/refs/he
 ----
 
 == Deploy ApiCurio Registry 3
+
+=== Install ApiCurio Registry 3 Operator
+
+First, install the necessary Red Hat Operators for ApiCurio Registry 3 (`Red Hat build of Apicurio Registry 3`) into the `openshift-operators` namespace:
+
+[source, bash]
+----
+oc apply -f - <<EOFapiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: apicurio-registry-3
+  namespace: openshift-operators
+  labels:
+    operators.coreos.com/apicurio-registry-3.openshift-operators: ''
+spec:
+  channel: 3.x
+  installPlanApproval: Automatic
+  name: apicurio-registry-3
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: apicurio-registry-3.v3.0.9-r3
+EOF
+----
 
 [source, bash]
 ----
