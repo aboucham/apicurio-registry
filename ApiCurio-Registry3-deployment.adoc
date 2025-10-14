@@ -102,7 +102,7 @@ spec:
   name: apicurio-registry-3
   source: redhat-operators
   sourceNamespace: openshift-marketplace
-  startingCSV: apicurio-registry-3.v3.0.9-r3
+  startingCSV: apicurio-registry-3.v3.0.15-r1
 EOF
 ----
 
