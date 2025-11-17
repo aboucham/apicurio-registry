@@ -12,13 +12,13 @@ spec:
       - name: JAVA_TOOL_OPTIONS
         value: '-Dquarkus.log.level=INFO'
       - name: APICURIO_KAFKASQL_TOPIC
-        value: apicurio3-kafkasql-journal
+        value: $APICURIO_KAFKASQL_TOPIC
       - name: APICURIO_KAFKASQL_SNAPSHOTS_TOPIC      # NEW DEFINED USING CUSTOM TOPIC NAME
-        value: apicurio3-kafkasql-snapshots
+        value: $APICURIO_KAFKASQL_SNAPSHOTS_TOPIC
     replicas: 1
     storage:
       kafkasql:
-        bootstrapServers: 'kafka-cluster-kafka-bootstrap:9092'
+        bootstrapServers: $KAFKA_BOOTSTRAP
       type: kafkasql
   ui:
     ingress:
