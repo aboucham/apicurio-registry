@@ -1,0 +1,66 @@
+apiVersion: registry.apicur.io/v1
+kind: ApicurioRegistry3
+metadata:
+  name: $APPLICATION_NAME
+spec:
+  app:
+    ingress:
+      enabled: false
+    features:
+      resourceDeleteEnabled: true
+    env:
+      - name: JAVA_TOOL_OPTIONS
+        value: '-Dquarkus.log.level=INFO'
+      - name: APICURIO_KAFKASQL_TOPIC
+        value: apicurio3-kafkasql-journal
+      - name: APICURIO_KAFKASQL_SNAPSHOTS_TOPIC      # NEW DEFINED USING CUSTOM TOPIC NAME
+        value: apicurio3-kafkasql-snapshots
+    replicas: 1
+    storage:
+      kafkasql:
+        bootstrapServers: 'kafka-cluster-kafka-bootstrap:9092'
+      type: kafkasql
+  ui:
+    ingress:
+      enabled: false
+    env:
+      - name: REGISTRY_API_URL
+        value: https://$APP_INGRESS_URL/apis/registry/v3
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: apicurio-registry-app
+  annotations:
+    kubernetes.io/tls-acme: "true"
+  labels:
+    app: $APPLICATION_NAME
+spec:
+  host: $APP_INGRESS_URL
+  to:
+    kind: Service
+    name: registry-app-service
+    weight: 100
+  wildcardPolicy: None
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: apicurio-registry-ui
+  annotations:
+    kubernetes.io/tls-acme: "true"
+  labels:
+    app: $APPLICATION_NAME
+spec:
+  host: $UI_INGRESS_URL
+  to:
+    kind: Service
+    name: registry-ui-service
+    weight: 100
+  wildcardPolicy: None
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
